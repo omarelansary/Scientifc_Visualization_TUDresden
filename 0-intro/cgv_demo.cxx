@@ -74,7 +74,7 @@ protected:
 	//           initialize this to "do not use custom quad" when constructing the
 	//           object.
 
-	// < your code here >
+	bool use_custom_quad = false;
 
 	// [END] Task 1.1
 	//*********************************************************************************/
@@ -150,6 +150,7 @@ public:
 			rh.reflect_member("fb_bgcolor_g", fb_bgcolor_g) &&
 			rh.reflect_member("fb_bgcolor_b", fb_bgcolor_b) &&
 			rh.reflect_member("wireframe", wireframe) &&
+			rh.reflect_member("use_custom_quad", use_custom_quad) &&
 			rh.reflect_member("draw_backside", draw_backside);
 	}
 
@@ -340,7 +341,7 @@ public:
 		// Task 1.1: add a GUI control to switch between custom tesselation of the quad
 		//           and the one built into the cgv::render::context.
 
-		// < Your code here >
+		add_member_control(this, "use_custom_quad", use_custom_quad, "toggle");
 
 		// [END] Task 1.1
 		//*****************************************************************************/
@@ -492,6 +493,9 @@ public:
 		// Task 1.1: If enabled, render the quad with custom tesselation
 		//           instead of using tesselate_unit_square(). You can invoke
 		//           the method draw_my_unit_square() for this.
+		if (use_custom_quad)
+			draw_my_unit_square(ctx);
+		else
 			ctx.tesselate_unit_square();
 
 		//*********************************************************************/
@@ -504,8 +508,12 @@ public:
 		// Task 1.1: If enabled, render the quad with custom tesselation
 		//           instead of using tesselate_unit_square(). Again, you
 		//           can invoke the method draw_my_unit_square() for this.
-			if (draw_backside)
+		if (draw_backside) {
+			if (use_custom_quad)
+				draw_my_unit_square(ctx);
+			else
 				ctx.tesselate_unit_square();
+		}
 
 		//*****************************************************************/
 		glPopAttrib();

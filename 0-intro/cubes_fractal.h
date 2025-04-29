@@ -25,7 +25,6 @@ protected:
 	// Used to pass reflectance information to shaders for coloring the cubes
 	cgv::media::illum::surface_material material;
 
-
 public:
 
 	/** The default constructor. */
