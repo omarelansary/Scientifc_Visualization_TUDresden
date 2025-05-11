@@ -1,6 +1,8 @@
 # Ignore Build output
 cmake-build*
 build
+.cache
+compile_commands.json
 
 # Ignore Visual Studio files
 *.vs
