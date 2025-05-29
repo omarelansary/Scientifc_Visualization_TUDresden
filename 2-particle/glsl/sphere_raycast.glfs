@@ -15,6 +15,9 @@ in sphere_quad_info quad;
 
 in vec4 color_fs;
 
+in float radius_fs;
+in mat3 NM_fs;
+
 
 //***** begin interface of surface.glsl ***********************************
 vec4 compute_reflected_appearance(vec3 position_eye, vec3 normal_eye, vec4 color, int side);
@@ -43,6 +46,13 @@ bool compute_ray_sphere_intersection(out vec3 x_eye, out vec3 n_eye)
                   point in eye coordinates.*/
 
      /*<your_code_here>*/
+    float v_length = length(quad.v_eye);
+    float beta = radius_fs * sqrt(1.0 - dot(quad.q_tilde, quad.q_tilde)) / v_length;
+    float lambda = 1.0 / (1.0 + beta);
+
+    x_eye = lambda * quad.v_eye;
+
+    n_eye = normalize(lambda * (NM_fs * quad.v_eye));
 
     /************************************************************************************/
 

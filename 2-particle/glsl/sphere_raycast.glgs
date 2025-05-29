@@ -28,6 +28,8 @@ in vec4  color_gs[];
 
 out vec4  color_fs;
 out sphere_quad_info quad;
+out float radius_fs;
+out mat3 NM_fs;
 
 
 /// emits one vertex of the sphere quad depending on the sphere center and the current corner
@@ -63,6 +65,8 @@ void generate_quad_vertex(in vec4 sphere, in vec2 t, in sphere_parameter_space s
 	vec4 v_eye4 = MV * vec4(v_world, 1.0);
 	quad.v_eye = v_eye4.xyz;
 	gl_Position = MVP * vec4(v_world, 1.0);
+    radius_fs = sphere.w;  // the .w of sphere contains the radius
+    NM_fs = NM;
 
 
     /************************************************************************************/
