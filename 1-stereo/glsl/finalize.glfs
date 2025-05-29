@@ -39,6 +39,8 @@ float rescale_depth(in float depth)
     return fract(depth_scale * (clamp(1.0-depth, min_depth, max_depth) - min_depth) / (max_depth - min_depth));
 }
 
+// Remap window coordinates from left eye to right eye
+// Remap window coordinates from left eye to right eye
 vec3 remap_window_coords(in vec3 window, in vec3 size, in mat4 T, out vec2 t)
 {
     /************************************************************************************
@@ -51,9 +53,16 @@ vec3 remap_window_coords(in vec3 window, in vec3 size, in mat4 T, out vec2 t)
           mat4 T      - transformation matrix from window coordinates of left/right view to clip
                         coordinates of rigth/left view*/
 
-     vec3 mapped_coord = window;
-     /*<your_code_here>*/
-     return mapped_coord;
+    vec4 new_ndc = T * vec4(window.xy / size.xy * 2.0 - vec2(1.0), window.z * 2.0 - 1.0, 1.0);
+    new_ndc.xyz /= new_ndc.w;
+    
+    t = 0.5f * (new_ndc.xy + vec2(1.0));
+    
+    return vec3(
+        (new_ndc.x + 1.0) * 0.5 * size.x,  
+        (new_ndc.y + 1.0) * 0.5 * size.y, 
+        0.5 * (new_ndc.z + 1.0)  
+    );
 
     /************************************************************************************/
 }
@@ -83,11 +92,16 @@ bool check_visibility(in float d, in vec3 size, in mat4 T, in sampler2D other_de
           Then compare d_remapped to the current depth (d). For this use the remap_epsilon variable
           to make the comparison a bit more flexible. */
 
-     /*<your_code_here>*/
-
+    d_remapped = texture(other_dep_tex, p_texcrd_in_other_image).r;
+    if (abs(d - d_remapped) < remap_epsilon * max(d, d_remapped)) {
+        c_remapped = texture(other_col_tex, p_texcrd_in_other_image);
+        return true;
+    } else {
+        c_remapped = vec4(0, 1, 0, 1);
+        return false;
+    }
+     
     /************************************************************************************/
-
-    return true;
 }
 
 void main()
@@ -141,8 +155,32 @@ void main()
               Take care which view is selected in the UI (image_idx). And use a
               suitable transfer function to display the values. You can also integrate the slider
               parallax_scale to adjust the transfer function from the UI. */
+            // Calculate the texture coordinates for the current view
+        vec2 current_texcrd = texcrd;
+        vec2 other_texcrd;
+        vec3 size = vec3(float(w), float(h), 1.0);
+        float d, d_other;
+        vec4 c_other;
+    
+        // Determine the current view (left or right)
+        if (image_idx == 0) {  // Left view
+            d = texture(dep_tex_0, current_texcrd).r;
+            check_visibility(d, size, MVP_r * iMVP_l, dep_tex_1, col_tex_1, other_texcrd, d_other, c_other);
+        } else {  // Right view
+            d = texture(dep_tex_1, current_texcrd).r;
+            check_visibility(d, size, MVP_l * iMVP_r, dep_tex_0, col_tex_0, other_texcrd, d_other, c_other);
+        }
 
-         /*<your_code_here>*/
+        // Calculate the parallax difference
+        vec2 parallax_diff = other_texcrd - current_texcrd;
+        float parallax_value = parallax_scale * length(parallax_diff);
+
+        // Map the parallax to colors (cyan for negative, red for positive)
+        if (parallax_value < 0.0) {
+            frag_color = vec4(0.0, 1.0 - abs(parallax_value), 1.0, 1.0); // Cyan tones
+        } else {
+            frag_color = vec4(1.0, 1.0 - abs(parallax_value), 0.0, 1.0); // Red tones
+        }
 
         /***********************************************************************************/
         break;
@@ -155,7 +193,7 @@ void main()
                   combine the color channels of each view in such a way that result in true anaglyph.
                   You can utilize the 'Y' variable for this. */
 
-             /*<your_code_here>*/
+             frag_color = vec4(dot(c_0, Y), 0, dot(c_1, Y), 1.0);        
 
             /***********************************************************************************/
             break;
@@ -165,7 +203,7 @@ void main()
                   combine the color channels of each view in such a way that result in true anaglyph.
                   You can utilize the 'Y' variable for this. */
 
-             /*<your_code_here>*/
+            frag_color = vec4(dot(c_0, Y), dot(c_1, Y), dot(c_1, Y), 1.0);
 
             /***********************************************************************************/
             break;
@@ -178,8 +216,7 @@ void main()
                   combine the color channels of each view in such a way that result in true anaglyph.
                   You can utilize the 'Y' variable for this. */
 
-             /*<your_code_here>*/
-
+            frag_color = vec4(dot(c_0, Y), c_1.g, c_1.b, 1.0);
             /***********************************************************************************/
             break;
         case 4: // optimized

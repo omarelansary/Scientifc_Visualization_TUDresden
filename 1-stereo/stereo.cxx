@@ -22,6 +22,7 @@
 #include <cgv/gui/key_event.h>
 #include <random>
 
+
 using namespace cgv::render;
 using namespace cgv::math;
 
@@ -602,8 +603,34 @@ public:
         glEnable(GL_DEPTH_TEST);
     }
 
+    cgv::math::fmat<float, 4, 4> build_off_center_frustum(float l, float r, float b, float t, float n, float f)
+    {
+        cgv::math::fmat<float, 4, 4> P;
+        P(0, 0) = 2 * n / (r - l);
+        P(0, 1) = 0;
+        P(0, 2) = (r + l) / (r - l);
+        P(0, 3) = 0;
+
+        P(1, 0) = 0;
+        P(1, 1) = 2 * n / (t - b);
+        P(1, 2) = (t + b) / (t - b);
+        P(1, 3) = 0;
+
+        P(2, 0) = 0;
+        P(2, 1) = 0;
+        P(2, 2) = -(f + n) / (f - n);
+        P(2, 3) = -2 * f * n / (f - n);
+
+        P(3, 0) = 0;
+        P(3, 1) = 0;
+        P(3, 2) = -1;
+        P(3, 3) = 0;
+
+        return P;
+    }
 
     /// renders each view in seperate framebuffer and combines them in a third rendering pass
+/// renders each view in seperate framebuffer and combines them in a third rendering pass
     void indirect_two_pass_stereo(context& ctx)
     {
         // collect eye independent stereo parameters from view
@@ -630,6 +657,20 @@ public:
         glViewport(0, 0, w, h);
 
         cgv::mat4 MVP[2];
+        cgv::mat4 translation_left = identity4<float>();
+        cgv::mat4 translation_right = identity4<float>();
+        //cgv::mat4 shearing_left = identity4<float>();
+        //cgv::mat4 shearing_right = identity4<float>();
+        translation_left(0, 3) = -0.5 *screen_width* eye_separation;
+        translation_right(0, 3) = 0.5 * screen_width*  eye_separation;
+        //shearing_left(0, 2) = (0.5 * eye_separation) / parallax_zero_depth;
+        //shearing_right(0, 2) = -(0.5 * eye_separation) / parallax_zero_depth;
+
+        cgv::mat4 transformation_left = translation_left;
+        cgv::mat4 transformation_right = translation_right;
+
+
+
         // render scene for each view to the corresponding framebuffer
         for (int i = 0; i < 2; ++i) {
             // current view (-1 = left & 1 = right) which can be used as sign in the matrix computations
@@ -638,7 +679,7 @@ public:
             // save current projection and modelview matrices
             ctx.push_projection_matrix();
             ctx.push_modelview_matrix();
- 
+
             // enable current framebuffer
             fbos[i].enable(ctx);
 
@@ -651,22 +692,66 @@ public:
              tasks 1.1.a:  tranformation matrices
                   Compute the correct model view and projection matrices for the current eye and set it
                   with ctx.set_projection_matrix() and ctx.set_modelview_matrix(). You can get the
-                  matrices for the current camera position with ctx.get_projection_matrix() and 
+                  matrices for the current camera position with ctx.get_projection_matrix() and
                   ctx.get_modelview_matrix().
                   You can use fmat<float, 4, 4> for matrix computations.
-			      You may have a look at the variables: eye, eye_separation, screen_width, screen_height,
-					parallax_zero_depth, z_near, z_far.
+                  You may have a look at the variables: eye, eye_separation, screen_width, screen_height,
+                    parallax_zero_depth, z_near, z_far.
              tasks 1.1.b:  cyclopic lighting
                   Instead of using the lighting from both eye positions, set the correct projection and modelview
                   matriices for cyclopic lighting.
                   Use the variable 'cyclopic_lighting' to make it switch between both lightings */
+            
+            // Task 1.1.a Implementation:
 
-             /*<your_code_here>*/
+            cgv::mat4 old_MV = ctx.get_modelview_matrix();
+            cgv::mat4 mv;
+
+            if (cyclopic_lighting)
+            { 
+                mv = old_MV;
+            }
+            else {
+                mv = (eye == -1 ? transformation_left : transformation_right) * old_MV;
+            }
+                ctx.set_modelview_matrix(mv);
+
+            
+
+            float n = z_near;
+            float f = z_far;
+            float z0 = parallax_zero_depth;
+            float h = screen_height;
+            float w = screen_width;
+
+            // t and b same for both eyes
+            float t = 0.5f * h * n / z0;
+            float b = -t;
+
+            // horizontal shift
+            float eye_offset = 0.5f * eye * eye_separation * w;
+            float delta = eye * 0.5f * eye_separation * n * w / z0;
+
+            // compute l and r for the current eye
+            float l = -0.5f * w * n / z0 + delta;
+            float r = 0.5f * w * n / z0 + delta;
+
+            // Build projection matrix
+            cgv::mat4 proj = build_off_center_frustum(l, r, b, t, n, f);
+
+
+
+            if (cyclopic_lighting) {
+                proj = proj * (eye == -1 ? transformation_left : transformation_right);
+            }
+
+            ctx.set_projection_matrix(proj);
 
             /***********************************************************************************/
 
             // store per eye modelview projection matrix to hand over to finalization pass
             MVP[i] = ctx.get_projection_matrix() * ctx.get_modelview_matrix();
+
 
             // render scene
             render_scene(ctx);
@@ -676,6 +761,7 @@ public:
             ctx.pop_projection_matrix();
             ctx.pop_modelview_matrix();
         }
+
 
         // recover original viewport which is used to render the screen filling rectangle
         glViewport(0, 0, ctx.get_width(), ctx.get_height());
@@ -710,7 +796,7 @@ public:
         finalize_prog.set_uniform(ctx, "min_depth", min_depth);
         finalize_prog.set_uniform(ctx, "max_depth", max_depth);
         finalize_prog.set_uniform(ctx, "depth_scale", depth_scale);
-        finalize_prog.set_uniform(ctx, "discard_fragments_on_far_clipping_plane", discard_fragments_on_far_clipping_plane);     
+        finalize_prog.set_uniform(ctx, "discard_fragments_on_far_clipping_plane", discard_fragments_on_far_clipping_plane);
         finalize_prog.set_uniform(ctx, "z_far_epsilon", z_far_epsilon);
         finalize_prog.set_uniform(ctx, "remap_epsilon", remap_epsilon);
         finalize_prog.set_uniform(ctx, "parallax_scale", parallax_scale);
