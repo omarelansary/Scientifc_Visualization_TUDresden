@@ -14,3 +14,8 @@ ipch
 # Ignore JetBrains configurations
 .idea
 .run
+0-intro/CMakeCache.txt
+0-intro/CMakeFiles/3.29.8/CMakeSystem.cmake
+0-intro/CMakeFiles/cmake.check_cache
+0-intro/CMakeFiles/CMakeConfigureLog.yaml
+\[OmarElAnsary\]_\[HussamChihadeh\]_\[GeorgMaximilian\]_ex1.zip

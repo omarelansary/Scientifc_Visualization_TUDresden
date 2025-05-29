@@ -33,6 +33,8 @@ bool compute_ray_sphere_intersection(out vec3 x_eye, out vec3 n_eye)
                   Use q_tilde for an easy intersection test based on texture coordinates.*/
 
      /*<your_code_here>*/
+    if (length(quad.q_tilde) > 1.0)
+        return false;
 
     /************************************************************************************/
 
