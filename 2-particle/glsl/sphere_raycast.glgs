@@ -7,13 +7,16 @@ struct sphere_parameter_space
     vec3  x_tilde;  // orthogonal direction x with length roh
     vec3  y_tilde;  // orthogonal direction y with length roh
     vec3  e_tilde;  // eye point
-     /*<your_variables_here - exactly as in sphere_parameter_space of sphere_raycast.glvs>*/
+     /*<your_variables_here - exa   ctly as in sphere_parameter_space of sphere_raycast.glvs>*/
 };
 
 struct sphere_quad_info
 {
     vec2 q_tilde;   // texture coordinate
     vec3 v_eye;     // corner in eye coordinates
+    vec2 zw_clip; // for depth correction
+    vec3 e_tilde_fs;
+    mat3 NM_fs;
      /*<your_variables_here - also add in sphere_raycast.glfs>*/
 };
 
@@ -29,7 +32,7 @@ in vec4  color_gs[];
 out vec4  color_fs;
 out sphere_quad_info quad;
 out float radius_fs;
-out mat3 NM_fs;
+
 
 
 /// emits one vertex of the sphere quad depending on the sphere center and the current corner
@@ -66,7 +69,9 @@ void generate_quad_vertex(in vec4 sphere, in vec2 t, in sphere_parameter_space s
 	quad.v_eye = v_eye4.xyz;
 	gl_Position = MVP * vec4(v_world, 1.0);
     radius_fs = sphere.w;  // the .w of sphere contains the radius
-    NM_fs = NM;
+    quad.e_tilde_fs = sps.e_tilde;
+    quad.zw_clip = (MVP*gl_Position).zw;
+    quad.NM_fs = NM;
 
 
     /************************************************************************************/
