@@ -1,10 +1,13 @@
-#version 330
+#version 430
 #extension GL_EXT_geometry_shader4 : enable
 
 layout(lines) in;
-layout(triangle_strip, max_vertices = 24) out;
+layout(triangle_strip, max_vertices = 96) out; // enough vertices for 4 cylinders, as pairs of atoms generally don't have more than 4 bonds between them
 
 uniform float radius;
+layout (std430, binding = 0) buffer Connections {
+    int num_connections[];
+};
 
 in vec4 color_gs[];
 
@@ -73,7 +76,7 @@ mat4 rotate(vec3 axis, float angle)
                 0.0,                                0.0,                                0.0,                                1.0);
 }
 
-void main()
+void generate_cylinder(vec3 p0, vec3 p1, float r)
 {
 	/*
 	Besides the eye and clip coordinate systems, a unit cylinder coordinates
@@ -93,8 +96,6 @@ void main()
     				given through the input line (gl_in[0/1].gl_Position). Radius is given as a
     			    uniform. */
 
-    vec3 p0 = gl_in[0].gl_Position.xyz;
-    vec3 p1 = gl_in[1].gl_Position.xyz;
     vec3 t = normalize(p1 - p0);
     vec3 u = normalize(cross(t, dot(t.xy, t.xy) > 0.0001 ? vec3(0, 0, 1) : vec3(0, 1, 0)));
     vec3 v = normalize(cross(t, u));
@@ -102,8 +103,8 @@ void main()
     vec3 rotation_axis = cross(t, vec3(0, 0, 1));
     float rotation_angle = acos(dot(t, vec3(0, 0, 1)));
 
-    hM_ucyl_world = translate(p0) * rotate(rotation_axis, rotation_angle) * scale(vec3(radius, radius, distance(p0, p1)));
-    M_ucyl_world = mat3(radius * u, radius * v, t);
+    hM_ucyl_world = translate(p0) * rotate(rotation_axis, rotation_angle) * scale(vec3(r, r, distance(p0, p1)));
+    M_ucyl_world = mat3(r * u, r * v, t);
 
     /************************************************************************************/
 
@@ -153,4 +154,24 @@ void main()
 		vec4(-1.0,  1.0, 0.0, 1.0),
 		vec4( 1.0, -1.0, 0.0, 1.0),
 		vec4( 1.0,  1.0, 0.0, 1.0));
+}
+
+void main()
+{
+    int num_connections = num_connections[gl_PrimitiveIDIn];
+
+    vec3 p0 = gl_in[0].gl_Position.xyz;
+    vec3 p1 = gl_in[1].gl_Position.xyz;
+
+    if (num_connections <= 1) {
+        generate_cylinder(p0, p1, radius);
+    } else {
+        vec3 n = normalize(cross(p1 - p0, vec3(0.0, 0.0, 1.0)));
+        for (int i = 0; i < num_connections; i++) {
+            // rotate n around p1-p0 by the angle
+            float angle = 2.0 * 3.141592654 * float(i) / float(num_connections);
+            vec3 n2 = (rotate(p1 - p0, angle) * vec4(n, 0.0)).xyz;
+            generate_cylinder(p0 + n2 * radius, p1 + n2 * radius, radius / 2.0);
+        }
+    }
 }
