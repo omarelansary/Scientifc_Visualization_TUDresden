@@ -47,6 +47,31 @@ void emit_quad(in mat4 hM_ucyl_clip, in mat4 hM_ucyl_eye,
 	EndPrimitive();
 }
 
+mat4 translate(vec3 translation)
+{
+    return mat4(vec4(1, 0, 0, 0), vec4(0, 1, 0, 0), vec4(0, 0, 1, 0), vec4(translation, 1));
+}
+
+mat4 scale(vec3 scale)
+{
+    return mat4(scale.x, 0.0, 0.0, 0.0,
+                0.0, scale.y, 0.0, 0.0,
+                0.0, 0.0, scale.z, 0.0,
+                0.0, 0.0, 0.0, 1.0);
+}
+
+mat4 rotate(vec3 axis, float angle)
+{
+    axis = normalize(axis);
+    float s = sin(angle);
+    float c = cos(angle);
+    float oc = 1.0 - c;
+
+    return mat4(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,
+                oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,
+                oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,
+                0.0,                                0.0,                                0.0,                                1.0);
+}
 
 void main()
 {
@@ -68,7 +93,17 @@ void main()
     				given through the input line (gl_in[0/1].gl_Position). Radius is given as a
     			    uniform. */
 
-     /*<your_code_here>*/
+    vec3 p0 = gl_in[0].gl_Position.xyz;
+    vec3 p1 = gl_in[1].gl_Position.xyz;
+    vec3 t = normalize(p1 - p0);
+    vec3 u = normalize(cross(t, dot(t.xy, t.xy) > 0.0001 ? vec3(0, 0, 1) : vec3(0, 1, 0)));
+    vec3 v = normalize(cross(t, u));
+
+    vec3 rotation_axis = cross(t, vec3(0, 0, 1));
+    float rotation_angle = acos(dot(t, vec3(0, 0, 1)));
+
+    hM_ucyl_world = translate(p0) * rotate(rotation_axis, rotation_angle) * scale(vec3(radius, radius, distance(p0, p1)));
+    M_ucyl_world = mat3(radius * u, radius * v, t);
 
     /************************************************************************************/
 

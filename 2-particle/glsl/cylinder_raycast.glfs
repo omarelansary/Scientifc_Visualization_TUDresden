@@ -1,4 +1,4 @@
-#version 150 
+#version 150
 
 //***** begin interface of fragment.glfs ***********************************
 uniform float gamma = 2.2;
@@ -29,11 +29,20 @@ bool compute_cylinder_intersection(in vec3 e_ucyl, in vec3 v_ucyl, out float lam
 				    (x_ucyl=+-1 or y_ucyl=+-1) comparison is with respect to 1-epsilon (lambda > 0.999) to
 					avoid numerical problems. */
 
-	 /*<your_code_here>*/
+	float a = v_ucyl.x * v_ucyl.x + v_ucyl.y * v_ucyl.y;
+
+	if (a < 0.0001) return false;
+
+	float b = 2.0 * (e_ucyl.x * v_ucyl.x + e_ucyl.y * v_ucyl.y);
+	float c = e_ucyl.x * e_ucyl.x + e_ucyl.y * e_ucyl.y - 1.0;
+
+	float discriminant = b * b - 4.0 * a * c;
+	if (discriminant < 0.0) return false;
+
+	lambda = (-b - sqrt(discriminant)) / (2.0 * a);
+	return true;
 
 	/************************************************************************************/
-
-	return false;
 }
 
 void main()
@@ -42,6 +51,7 @@ void main()
 	bool need_lambda = false;	// compute intersection with cylinder
 	vec3 x_ucyl = position_eye;
 	vec3 n_ucyl;
+	float epsilon = 0.001;
 
 	// check case where the rasterized fragment is inside the cylinder
 	need_lambda = true;
@@ -56,7 +66,10 @@ void main()
 						Otherwise set lambda to true. Set the normal (n_ucyl) to vec3(0.0, 0.0, -+1.0)
 						depending on the side. */
 
-		 /*<your_code_here>*/
+		if (position_ucyl.z < epsilon || position_ucyl.z > 1.0 - epsilon) {
+			need_lambda = false;
+			n_ucyl = vec3(0.0, 0.0, (position_ucyl.z < epsilon) ? -1.0 : 1.0);
+		}
 
 		/************************************************************************************/
 	}
@@ -81,17 +94,19 @@ void main()
 	}
 
 	// transform intersection to eye coordinates
-	vec3 p_eye = (hM_ucyl_eye * vec4(x_ucyl, 1.0)).xyz;
+	vec4 p_eye = (hM_ucyl_eye * vec4(x_ucyl, 1.0));
 	vec3 n_eye = normalize(NM_ucyl_eye * n_ucyl);
 
 	/************************************************************************************
 	 tasks 2.2c:  Update gl_FragDepth with the corrected depth value for the intersection
 					point. */
 
-	 /*<your_code_here>*/
+	vec4 zw_cl = get_projection_matrix() * p_eye;
+	float z_NDC = zw_cl.z / zw_cl.w;
+	gl_FragDepth = 0.5 * (z_NDC + 1.0);
 
 	/************************************************************************************/
 
 	// compute color from illumination in eye coords
-	finish_fragment(compute_reflected_appearance(p_eye, n_eye, color_fs, 1));
+	finish_fragment(compute_reflected_appearance(p_eye.xyz, n_eye, color_fs, 1));
 }

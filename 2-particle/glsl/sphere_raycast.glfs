@@ -1,4 +1,4 @@
-#version 150 
+#version 150
 
 uniform int culling_mode = 0;
 uniform int map_color_to_material = 0;
@@ -8,7 +8,6 @@ struct sphere_quad_info
 {
     vec2 q_tilde;   // texture coordinate
     vec3 v_eye;     // ray vector in eye coordinates
-    vec2 zw_clip; // for depth correction
     vec3 e_tilde_fs;
     mat3 NM_fs;
      /*<your_variables_here - exactly as in sphere_quad_info of sphere_raycast.glgs>*/
@@ -24,6 +23,8 @@ in float radius_fs;
 //***** begin interface of surface.glsl ***********************************
 vec4 compute_reflected_appearance(vec3 position_eye, vec3 normal_eye, vec4 color, int side);
 //***** end interface of surface.glsl ***********************************
+
+mat4 get_projection_matrix();
 
 //***** begin interface of fragment.glfs ***********************************
 uniform float gamma = 2.2;
@@ -57,7 +58,7 @@ bool compute_ray_sphere_intersection(out vec3 x_eye, out vec3 n_eye)
     n_eye = normalize(
     quad.NM_fs * quad.e_tilde_fs + lambda * (quad.NM_fs * (quad.v_eye - quad.e_tilde_fs)));
 
-    
+
 
     /************************************************************************************/
 
@@ -65,9 +66,9 @@ bool compute_ray_sphere_intersection(out vec3 x_eye, out vec3 n_eye)
      tasks 2.1d:  Update gl_FragDepth with the corrected depth value for the intersection
                   point.*/
 
-     /*<your_code_here>*/
-    float z_ndc = quad.zw_clip.x / quad.zw_clip.y;
-    gl_FragDepth = 0.5 * (z_ndc + 1.0);
+    vec4 zw_cl = get_projection_matrix() * vec4(x_eye, 1.0);
+    float z_NDC = zw_cl.z / zw_cl.w;
+    gl_FragDepth = 0.5 * (z_NDC + 1.0);
 
     /************************************************************************************/
 
