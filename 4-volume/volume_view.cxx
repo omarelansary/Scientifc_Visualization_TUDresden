@@ -22,6 +22,8 @@
 
 enum NewColorScale {
 	CS_TEMPERATURE,
+	BlueGreenRedGradient,
+	BoneTissueAir,
 	/************************************************************************************
 	 tasks 4.2b: Add new color scales here */
 
@@ -118,6 +120,56 @@ protected:
 				case CS_TEMPERATURE: {
 					// get predefined cgv::rgb-color as emission value
 					reinterpret_cast<cgv::rgb&>(clr) = cgv::media::color_scale(v, cgv::media::CS_TEMPERATURE);
+					break;
+				}
+				case BlueGreenRedGradient: {
+					// BlueGreenRedGradient:
+					// This transfer function creates a smooth gradient transitioning from blue (low values) to green (medium values) to red (high values).
+					// - Blue: Represents low scalar values (v < 0.5).
+					// - Green: Represents medium scalar values (v = 0.5).
+					// - Red: Represents high scalar values (v > 0.5).
+
+					// Effects of different resolutions:
+					// - Low resolutions (e.g., 2, 4): Only red and blue colors appear, and only the skull is visible without any surroundings. The gradient looks rough, with noticeable color bands. 
+					// - Medium resolutions (e.g., 128): The gradient becomes smoother, balancing visual quality and performance.
+					// - High resolutions (e.g., 256): The gradient is very smooth, with almost no color bands. This is best for detailed visualizations but uses more memory and takes longer to render.
+					// Observation: There doesn’t seem to be a big difference between 128 and 256 resolutions. It’s unclear if this is correct or expected.
+					if (v < 0.5f) {
+						clr[0] = 0.0f; // R
+						clr[1] = 2.0f * v; // G
+						clr[2] = 1.0f - 2.0f * v; // B
+					}
+					else {
+						clr[0] = 2.0f * (v - 0.5f); // R
+						clr[1] = 1.0f - 2.0f * (v - 0.5f); // G
+						clr[2] = 0.0f; // B
+					}
+					break;
+				}
+				case BoneTissueAir: {
+					// BoneTissueAir:
+					// It maps scalar values to colors representing air, tissue, and bone.
+					// - Air: Light blue for low scalar values (v < 0.3), representing low-density regions.
+					// - Tissue: Pink for medium scalar values (0.3 <= v < 0.7), representing medium-density regions.
+					// - Bone: White for high scalar values (v >= 0.7), representing high-density regions.
+					if (v < 0.3f) {
+						// Air: Light Blue
+						clr[0] = 0.5f; // R
+						clr[1] = 0.8f; // G
+						clr[2] = 1.0f; // B
+					}
+					else if (v < 0.7f) {
+						// Tissue: Pink
+						clr[0] = 1.0f; // R
+						clr[1] = 0.75f; // G
+						clr[2] = 0.8f; // B
+					}
+					else {
+						// Bone: White
+						clr[0] = 1.0f; // R
+						clr[1] = 1.0f; // G
+						clr[2] = 1.0f; // B
+					}
 					break;
 				}
 			}
@@ -282,14 +334,83 @@ public:
 		/************************************************************************************
 		 tasks 4.1a: Compute the signed distance between the given point p and the slice which
 					   is defined through oblique_slice_normal and oblique_slice_distance. */
-
+		float distance = cgv::math::dot(oblique_slice_normal, p) - oblique_slice_distance;
 		 /*<your_code_here>*/
-		 return 0;
+		 return distance;
 
 		/************************************************************************************/
 	}
 	/// returns the 3D-texture coordinates of the polygon edges describing the current slice through
 	/// the volume
+	/// 
+	void arrange_points_by_faces(std::vector<cgv::vec3>& polygon, const std::vector<cgv::vec3>& edge_points) {
+		// Define the 6 faces of the unit cube using corner indices
+		const int faces[6][4] = {
+			{0, 1, 3, 2}, // Bottom face
+			{4, 5, 7, 6}, // Top face
+			{0, 4, 6, 2}, // Left face
+			{1, 5, 7, 3}, // Right face
+			{0, 1, 5, 4}, // Front face
+			{2, 3, 7, 6}  // Back face
+		};
+
+		// Helper structure to store edge points by face
+		struct FaceInfo {
+			std::vector<cgv::vec3> points;
+		};
+		std::vector<FaceInfo> face_infos(6);
+
+		// Iterate over all faces
+		for (int f = 0; f < 6; ++f) {
+			const int* face = faces[f];
+
+			// Iterate over the edges of the face
+			for (int i = 0; i < 4; ++i) {
+				int corner1 = face[i];
+				int corner2 = face[(i + 1) % 4];
+
+				// Find the edge point corresponding to this edge
+				for (const auto& edge_point : edge_points) {
+					// Check if the edge point lies on the current edge
+					if (is_point_on_edge(edge_point, corner1, corner2)) {
+						face_infos[f].points.push_back(edge_point);
+						break;
+					}
+				}
+			}
+
+			// Ensure points are ordered clockwise or counterclockwise
+			// (Optional: Sort points if necessary)
+		}
+
+		// Add ordered points to the polygon vector
+		for (const auto& face_info : face_infos) {
+			polygon.insert(polygon.end(), face_info.points.begin(), face_info.points.end());
+		}
+	}
+
+	// Helper function to check if a point lies on an edge
+	bool is_point_on_edge(const cgv::vec3& point, int corner1, int corner2) {
+		// Convert corner indices to positions in the unit cube
+		cgv::vec3 pos1(
+			float((corner1 >> 0) & 1),
+			float((corner1 >> 1) & 1),
+			float((corner1 >> 2) & 1)
+		);
+		cgv::vec3 pos2(
+			float((corner2 >> 0) & 1),
+			float((corner2 >> 1) & 1),
+			float((corner2 >> 2) & 1)
+		);
+
+		// Check if the point lies on the line segment between pos1 and pos2
+		cgv::vec3 dir = pos2 - pos1;
+		cgv::vec3 to_point = point - pos1;
+		float t = cgv::math::dot(to_point, dir) / cgv::math::dot(dir, dir);
+
+		// Ensure t is within [0, 1] and the point is close to the line segment
+		return t >= 0.0f && t <= 1.0f && (pos1 + t * dir - point).length() < 1e-6f;
+	}
 	void construct_oblique_slice(std::vector<cgv::vec3>& polygon)
 	{
 		/************************************************************************************
@@ -300,7 +421,30 @@ public:
 					   have a positive distance.*/
 
 		 /*<your_code_here>*/
+		// Store the corners and their classification
+		struct CornerInfo {
+			cgv::vec3 pos;
+			float distance;
+			bool outside;
+		};
+		std::vector<CornerInfo> corners;
 
+		// Define a vector to store edge points
+		std::vector<cgv::vec3> edge_points;
+
+		// Enumerate all 8 corners of the unit cube
+		for (int i = 0; i < 8; ++i) {
+			cgv::vec3 corner(
+				float((i >> 0) & 1), // x: 0 or 1
+				float((i >> 1) & 1), // y: 0 or 1
+				float((i >> 2) & 1)  // z: 0 or 1
+			);
+			float distance = signed_distance_from_oblique_slice(corner);
+			bool outside = distance > 0;
+			corners.push_back({ corner, distance, outside });
+			// Optionally, for debugging: REMOVE this line in production code
+				std::cout << "Corner " << i << ": (" << corner.x() << "," << corner.y() << "," << corner.z() << ") dist=" << distance << " outside=" << outside << std::endl;
+		}
 		/************************************************************************************/
 
 		/************************************************************************************
@@ -314,6 +458,31 @@ public:
 
 		 /*<your_code_here>*/
 
+		// Define the 12 edges of the unit cube using corner indices
+		const int edges[12][2] = {
+			{0, 1}, {1, 3}, {3, 2}, {2, 0}, // Bottom face
+			{4, 5}, {5, 7}, {7, 6}, {6, 4}, // Top face
+			{0, 4}, {1, 5}, {2, 6}, {3, 7}  // Vertical edges
+		};
+
+		// Iterate over all edges
+		for (const auto& edge : edges) {
+			const CornerInfo& c1 = corners[edge[0]];
+			const CornerInfo& c2 = corners[edge[1]];
+
+			// Check if corners are differently classified
+			if (c1.outside != c2.outside) {
+				// Compute interpolation factor
+				float t = abs(c1.distance) / abs(c1.distance - c2.distance);
+
+				// Compute edge point
+				cgv::vec3 edge_point = c1.pos + t * (c2.pos - c1.pos);
+
+				// Store edge point in polygon vector
+				edge_points.push_back(edge_point);
+			}
+		}
+		arrange_points_by_faces(polygon, edge_points);
 		/************************************************************************************/
 	}
 	/// draw orthogonal and oblique slices
@@ -349,6 +518,19 @@ public:
 						   usage of glDrawArrays(GL_TRIANGLES...) each triangle consists of three vertices. */
 
 			 /*<your_code_here>*/
+
+			// Tessellate the polygon using a triangle fan
+			if (polygon.size() >= 3) {
+				// Use the first vertex as the shared vertex for the triangle fan
+				const cgv::vec3& shared_vertex = polygon[0];
+
+				for (size_t i = 1; i < polygon.size() - 1; ++i) {
+					// Add the vertices of the triangle to the P vector
+					P.push_back(shared_vertex);
+					P.push_back(polygon[i]);
+					P.push_back(polygon[i + 1]);
+				}
+			}
 
 			/************************************************************************************/
 		}
@@ -574,7 +756,7 @@ public:
 			/************************************************************************************
 			 tasks 4.2b: Add the name of the new color scales in the enums-string */
 
-			 add_member_control(this, "color_scale", color_scale, "dropdown", "enums='temperature'");
+			 add_member_control(this, "color_scale", color_scale, "dropdown", "enums='temperature, BlueGreenRedGradient, BoneTissueAir '");
 
 			/************************************************************************************/
 
